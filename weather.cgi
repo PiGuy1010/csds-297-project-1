@@ -15,7 +15,7 @@ if [[ -z $QUERY_STRING ]]; then
 	echo "</form>"
 	echo "<form action='weather.cgi' method='GET'>"
 	echo "  <textarea cols=80 rows=1 name='location'>"
-	echo "Enter a city, state"
+	echo "Enter a city and state (ex. Cleveland OH)"
 	echo "</textarea>"
 	echo "  <input type=submit>"
 	echo "</form>"
@@ -80,26 +80,42 @@ elif [[ -n $QUERY_STRING ]]; then
 		done < /tmp/temp.html
 	elif [[ ${QUERY_STRING::9} == "location=" ]]; then
 		rmpref=${QUERY_STRING#"location="}
-		justloc=${rmpref//%0D%0A/}
-		echo "You entered the location $justloc"
+		rmend=${rmpref//%0D%0A/}
+		justloc=${rmend//+/}
+		state=${justloc:(-2)}
+		city=${justloc:0:$((${#justloc}-2))}
+		echo "You entered the location $city, $state."
+		echo "<hr>"
+		echo "Can't query by location for The Weather Channel using the bash techniques employed for the rest of this application."
 		echo "<hr>"
 		# It's easiest to get Weather Underground's data from just a location, so that is what we do first in this case.
-		state=${justloc:(-2)}
-		city=${location:0:$((${#location}-4))}
 		wget -q -O /dev/stdout "wunderground.com/weather/us/$state/$city" > /tmp/temp.html
-		latregex=" *lat="
-		longregex=" *lon="
+		latregex="<*lat="
+		longregex="<*lon="
 		while IFS= read myline; do
-			if [[ $myline =~ $regex2 ]]; then
-				echo ""
+			if [[ $myline =~ $regex2 ]]; then	
+				cutpref=${myline#$regex2}
+				temp2=${cutpref%%<*}
+				echo "Weather Underground: $temp2"
+				echo -e "\xb0 F"
+				echo "<hr>"
 			fi
 			if [[ $myline =~ $latregex ]]; then
-				cutpref=${myline#$latregex}
+				cutpref=${myline##$latregex}
 				lat=${cutpref%%&*}
-				cutmore=${myline#$longregex}
+				cutmore=${myline##$longregex}
 				long=${cutmore%%&*}
 			fi
 		done < /tmp/temp.html
 		wget -q -O /dev/stdout "forecast.weather.gov/MapClick.php?lat=$lat&lon=$long" > /tmp/temp.html
+		while IFS= read myline; do
+			if [[ $myline =~ $regex3 ]]; then
+				cutpref=${myline##*\">}
+				temp3=${cutpref%%\&*}
+				echo $"National Weather Service: $temp3"
+				echo -e "\xb0 F"
+				echo "<hr>"
+			fi
+		done < /tmp/temp.html
 	fi
 fi
